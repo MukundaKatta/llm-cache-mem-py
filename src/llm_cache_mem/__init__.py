@@ -10,9 +10,12 @@ from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
+_MISSING = object()  # sentinel distinguishing "no cache entry" from a cached None
 
-def _hash_key(messages: list[dict], model: str | None = None,
-              extras: dict | None = None) -> str:
+
+def _hash_key(
+    messages: list[dict], model: str | None = None, extras: dict | None = None
+) -> str:
     """Produce a stable cache key from messages + model + extras."""
     payload = {"messages": messages, "model": model or "", "extras": extras or {}}
     serialized = json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str)
@@ -26,7 +29,7 @@ class CacheEntry:
     key: str
     response: Any
     created_at: float = field(default_factory=time.time)
-    ttl: float | None = None   # seconds; None = no expiry
+    ttl: float | None = None  # seconds; None = no expiry
     hit_count: int = 0
 
     @property
@@ -61,6 +64,10 @@ class LLMCache:
     """
 
     def __init__(self, max_size: int = 256, default_ttl: float | None = None) -> None:
+        if max_size < 1:
+            raise ValueError("max_size must be >= 1")
+        if default_ttl is not None and default_ttl <= 0:
+            raise ValueError("default_ttl must be positive or None")
         self.max_size = max_size
         self.default_ttl = default_ttl
         self._store: OrderedDict[str, CacheEntry] = OrderedDict()
@@ -88,17 +95,17 @@ class LLMCache:
                 return False
             return True
 
-    def get(self, key: str) -> Any:
-        """Return the cached response, or None if not found/expired."""
+    def get(self, key: str, default: Any = None) -> Any:
+        """Return the cached response, or ``default`` if not found/expired."""
         with self._lock:
             entry = self._store.get(key)
             if entry is None:
                 self._misses += 1
-                return None
+                return default
             if entry.expired:
                 del self._store[key]
                 self._misses += 1
-                return None
+                return default
             # Move to end (most recently used)
             self._store.move_to_end(key)
             entry.hit_count += 1
@@ -157,7 +164,12 @@ class LLMCache:
             "hit_rate": self.hit_rate,
         }
 
-    def wrap(self, model: str | None = None, extras: dict | None = None, ttl: float | None = None):
+    def wrap(
+        self,
+        model: str | None = None,
+        extras: dict | None = None,
+        ttl: float | None = None,
+    ):
         """
         Decorator that caches the return value keyed on the first argument (messages).
 
@@ -169,13 +181,15 @@ class LLMCache:
             @functools.wraps(fn)
             def wrapper(messages, *args, **kwargs):
                 key = self.make_key(messages, model=model, extras=extras)
-                cached = self.get(key)
-                if cached is not None:
+                cached = self.get(key, default=_MISSING)
+                if cached is not _MISSING:
                     return cached
                 result = fn(messages, *args, **kwargs)
                 self.put(key, result, ttl=ttl)
                 return result
+
             return wrapper
+
         return decorator
 
 

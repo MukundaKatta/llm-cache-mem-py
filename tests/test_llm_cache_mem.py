@@ -1,4 +1,5 @@
 """Tests for llm-cache-mem-py."""
+
 import time
 import pytest
 from llm_cache_mem import LLMCache, CacheEntry
@@ -65,7 +66,7 @@ def test_lru_access_order():
     k3 = cache.make_key([{"role": "user", "content": "3"}])
     cache.put(k1, "r1")
     cache.put(k2, "r2")
-    cache.get(k1)        # access k1 → moves to MRU
+    cache.get(k1)  # access k1 → moves to MRU
     cache.put(k3, "r3")  # evicts k2 (LRU)
     assert cache.get(k2) is None  # evicted
     assert cache.get(k1) == "r1"
@@ -164,6 +165,52 @@ def test_wrap_decorator():
         return {"content": "response"}
 
     r1 = call_llm(MSGS)
-    r2 = call_llm(MSGS)   # should be cached
+    r2 = call_llm(MSGS)  # should be cached
     assert r1 == r2
     assert len(calls) == 1  # only called once
+
+
+def test_wrap_caches_none_result():
+    """A None (or falsy) return value must still be cached, not recomputed."""
+    cache = LLMCache()
+    calls = []
+
+    @cache.wrap(model="test")
+    def call_llm(messages):
+        calls.append(1)
+        return None
+
+    assert call_llm(MSGS) is None
+    assert call_llm(MSGS) is None  # served from cache, not recomputed
+    assert len(calls) == 1
+
+
+def test_get_default_returned_on_miss():
+    cache = LLMCache()
+    sentinel = object()
+    assert cache.get("missing", default=sentinel) is sentinel
+
+
+def test_get_cached_falsy_value():
+    cache = LLMCache()
+    key = cache.make_key(MSGS)
+    cache.put(key, None)
+    sentinel = object()
+    assert cache.get(key, default=sentinel) is None  # real hit, not the default
+
+
+def test_invalid_max_size():
+    with pytest.raises(ValueError):
+        LLMCache(max_size=0)
+
+
+def test_invalid_default_ttl():
+    with pytest.raises(ValueError):
+        LLMCache(default_ttl=0)
+
+
+def test_cache_entry_expired_property():
+    entry = CacheEntry(key="k", response="r", ttl=None)
+    assert entry.expired is False
+    expired = CacheEntry(key="k", response="r", created_at=time.time() - 10, ttl=1.0)
+    assert expired.expired is True
