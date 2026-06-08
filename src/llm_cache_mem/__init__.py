@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
 import threading
@@ -175,7 +176,6 @@ class LLMCache:
 
         The decorated function must take messages as its first positional arg.
         """
-        import functools
 
         def decorator(fn: Callable) -> Callable:
             @functools.wraps(fn)

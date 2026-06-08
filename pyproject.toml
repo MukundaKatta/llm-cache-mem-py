@@ -9,15 +9,26 @@ version = "0.1.0"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.9"
+keywords = ["llm", "cache", "lru", "ttl", "memoize", "openai", "anthropic"]
 classifiers = [
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "License :: OSI Approved :: MIT License",
     "Intended Audience :: Developers",
     "Topic :: Software Development :: Libraries",
+    "Typing :: Typed",
 ]
 
 [project.urls]
 Homepage = "https://github.com/MukundaKatta/llm-cache-mem-py"
+Repository = "https://github.com/MukundaKatta/llm-cache-mem-py"
+Issues = "https://github.com/MukundaKatta/llm-cache-mem-py/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+llm_cache_mem = ["py.typed"]
